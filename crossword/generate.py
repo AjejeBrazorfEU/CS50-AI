@@ -1,5 +1,8 @@
 from random import random
+import math
+import re
 import sys
+from typing import overload
 
 from crossword import *
 
@@ -90,8 +93,12 @@ class CrosswordCreator():
         """
         Enforce node and arc consistency, and then solve the CSP.
         """
+        print("Enforcing node consistency")
         self.enforce_node_consistency()
+        print("Enforcing arc consistency")
         self.ac3()
+        print("Backtracking")
+        # print(self.domains)
         return self.backtrack(dict())
 
     def enforce_node_consistency(self):
@@ -214,10 +221,25 @@ class CrosswordCreator():
         The first value in the list, for example, should be the one
         that rules out the fewest values among the neighbors of `var`.
         """
-        # DA IMPLEMENTARE L'ORDINAMENTO
-        # FACCIO COSI SOLO PER PROVARE
-        return self.domains[var]
-        # raise NotImplementedError
+        print("Current assignment -> " + str(assignment))
+        print("Domain : " + str(self.domains[var]))
+        result = []
+        for word in self.domains[var]:
+            # print(word)
+            n = 0
+            for neighbor in self.crossword.neighbors(var):
+                if neighbor not in assignment.keys():
+                    for wordNeighbor in self.domains[neighbor]:
+                        
+                        overlap = self.crossword.overlaps[var,neighbor]
+                        if overlap is not None and wordNeighbor != word:
+                            if word[overlap[0]] != wordNeighbor[overlap[1]]:
+                                n += 1
+            result.append((word,n))
+        # print(result)
+        result.sort(key=lambda tup: tup[1])  # sorts in place
+        print(result)
+        return [r[0] for r in result]
 
     def select_unassigned_variable(self, assignment):
         """
@@ -227,13 +249,56 @@ class CrosswordCreator():
         degree. If there is a tie, any of the tied variables are acceptable
         return values.
         """
-        # DA IMPLEMENTARE PER BENE
+        """
+        minl = math.inf
+        min_var = None
         for var in self.domains:
             if var not in assignment.keys():
-                return var
+                l = len(self.domains[var])
+                if l < minl:
+                    minl = l
+                    min_var = var
+                elif l==minl:
+                    if len(self.crossword.neighbors(var)) > len(self.crossword.neighbors(min_var)):
+                        min_var = var
+        
+        return min_var
+        """
+
+        maxl = 0
+        max_var = None
+        for var in self.domains:
+            if var not in assignment.keys():
+                l = var.length
+                if l > maxl:
+                    maxl = l
+                    max_var = var
+        
+        return max_var
         #raise NotImplementedError
 
-    def backtrack(self, assignment):
+    def inference(self, assignment, var):
+        """
+        Optimize the work, enforcing arc consistency after every new variabile in the assignment
+        """
+        # Create the queue for all the nodes that might be changed
+        return None
+        queue = []
+        result = []
+        for neighbor in self.crossword.neighbors(var):
+            queue.append((neighbor,var))
+        if self.ac3(arcs=queue):
+            for var in self.domains:
+                if len(self.domains[var]) == 1 and var not in assignment.keys():
+                    # assignment[var] = self.domains[var][0]
+                    result[var] = self.domains[var][0]
+                    print("Inferenced " +str(var) +" ---> "+ str(result[var]))
+        else:
+            result = None
+
+        return result
+
+    def backtrack(self, assignment,n=0):
         """
         Using Backtracking Search, take as input a partial assignment for the
         crossword and return a complete assignment if possible to do so.
@@ -245,16 +310,28 @@ class CrosswordCreator():
         if self.consistent(assignment=assignment) and self.assignment_complete(assignment=assignment):
             return assignment
 
+        # print(self.domains)
         var = self.select_unassigned_variable(assignment=assignment)
+        # print("var : " +str(var) + " --> " + str(self.order_domain_values(var,assignment=assignment)))
         for word in self.order_domain_values(var,assignment=assignment):
-            # assignment_copy = assignment.copy()
-            # assignment_copy[var] = word
-            assignment[var] = word
+            # print(str(var) + " --> " + word)
+            assignment[var] = word 
+            inferences = None
             if self.consistent(assignment=assignment):
-                result = self.backtrack(assignment=assignment)
+                self.ac3()
+                inferences = self.inference(assignment=assignment,var=var)
+                if inferences is not None:
+                    for i in inferences:
+                        assignment[i] = inferences[i]
+
+                result = self.backtrack(assignment=assignment,n=n+1)
                 if result is not None:
                     return result
+            print(str(n*3*' ') + "Assignment " + str(var) + " : " + str(assignment[var]) + " was wrong")
             assignment.pop(var)
+            if inferences is not None:
+                for i in inferences:
+                    assignment.pop(i)
         return None
 
 
